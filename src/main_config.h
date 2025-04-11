@@ -3,6 +3,7 @@
 #include <CircularBuffer.h>
 #include <DigitalIO.h>
 #include <SPI.h>
+#include <teensy_config.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -11,12 +12,7 @@
 // Include ADNS Library for ADNS-9800 Sensor
 #include "ADNS9800/adns.h"
 
-// Pin Settings
-const int CS_PIN_A = 0; // left 0
-const int TRIGGER_PIN = 4;
-const int CS_PIN_B = 10; // right 10
 const bool TRIGGER_ACTIVE_STATE = HIGH;
-const int WATER_PIN = 5;
 
 // Global Constants 
 const int Baud_rate = 115200;
@@ -25,7 +21,7 @@ const float unitsPerRotationA = 1000000.1232/(3*2);  //average of three complete
 const float unitsPerRotationB =  773091.0366/(3*2); //average of three complete rotations
 const float sensorA_unit2Cm = ballCircumferenceCm/unitsPerRotationA;
 const float sensorB_unit2Cm = ballCircumferenceCm/unitsPerRotationB;
-const float unitsPer2PiRotationL = 24645112; // Number of sensor units per full rotation for left sensor
+const float unitsPer2PiRotationL = 24645112/1.2; // Number of sensor units per full rotation for left sensor
 const float unitsPer2PiRotationR = 9687052/75;
 const float pi = 3.14159; 
 const float sensorAngleRadians = 78 * 2 * M_PI/360;

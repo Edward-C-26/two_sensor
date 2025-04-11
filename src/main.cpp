@@ -164,7 +164,7 @@ void captureDisplacement() {
 // =============================================================================
 // TASKS: DATA_TRANSFER
 // =============================================================================
-
+// doesn't need to be changed
 void sendHeader() {
   const String dunit = getAbbreviation(units.distance);
   const String tunit = getAbbreviation(units.time);
@@ -251,7 +251,7 @@ void sendData(sensor_sample_t sampleA, String sensorNameA, sensor_sample_t sampl
 
   // compute the angle relative to the dx axis
   float rel_direction = atan2(dyT,dxT);
-  rel_direction = rel_direction+(-152*2*M_PI/360);
+  rel_direction = rel_direction+(-152*2*M_PI/360/4);
 
   // Validate final displacement calculations
   dyT = 4.60975609756/4*sin(rel_direction)*distance*6.0;
