@@ -208,10 +208,38 @@ void sendData(sensor_sample_t sampleA, String sensorNameA, sensor_sample_t sampl
   const String waterPinVal = 0;
   const String endline = String("\n");
 
-  float movement_X =  (left_x_calibrated + right_x_calibrated * cos(37/360 * 2 * pi) -  left_y_calibrated * sin(37/360 * 2 * pi))/2 * magic_number;
-  float movement_Y =  (left_y_calibrated + right_x_calibrated * cos(37/360 * 2 * pi) +  left_y_calibrated * sin(37/360 * 2 * pi))/2 * magic_number;
-  float rel_direction = atan2(movement_Y, movement_X) * 180 / PI;
-  float theta = atan2(movement_Y, movement_X);
+
+  float r_eff = sqrt(BALL_RADIUS * BALL_RADIUS - SENSOR_VERTICAL_OFFSET * SENSOR_VERTICAL_OFFSET);
+  float cos_tilt = cos(SENSOR_ANGLE);
+  float sin_tilt = sin(SENSOR_ANGLE);
+
+  // For LEFT sensor:
+  // Rotate local dx/dy to global axes (compensate for tilt inward)
+  float left_global_x = left_x_calibrated * cos_tilt - left_y_calibrated * sin_tilt;
+  float left_global_y = left_x_calibrated * sin_tilt + left_y_calibrated * cos_tilt;
+
+  // For RIGHT sensor:
+  // Rotate local dx/dy to global axes (compensate for tilt inward)
+  float right_global_x = right_x_calibrated * cos_tilt - right_y_calibrated * sin_tilt;
+  float right_global_y = right_x_calibrated * sin_tilt + right_y_calibrated * cos_tilt;
+
+  // 1. Compute angular displacement (rotation)
+  float delta_angle = (right_global_x - left_global_x) / (2.0 * r_eff);
+
+  // 2. Remove rotational component from translational motion
+  float left_translation_x = left_global_x - (delta_angle * r_eff);
+  float right_translation_x = right_global_x + (delta_angle * r_eff);
+
+  // 3. Compute pure translation (average both sensors)
+  float movement_X = (left_translation_x + right_translation_x) / 2.0 * magic_number;
+  float movement_Y = (left_global_y + right_global_y) / 2.0 * magic_number;
+
+  // 4. Calculate heading (optional)
+  static float current_heading = 0.0;
+  current_heading += delta_angle;
+
+  float theta = atan2(movement_Y, movement_X); // In radians
+  float rel_direction = theta * 180.0 / PI;    // Optional: Convert to degrees
 
   // // Print ASCII Strings
   // Serial.print(timestamp + delimiter + dxL + delimiter + dyL + delimiter + dtL + delimiter + 
