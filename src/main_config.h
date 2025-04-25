@@ -30,6 +30,9 @@ const float ballRadiusCm = ballCircumferenceCm/2/M_PI;
 const float MAX_SINGLE_DISPLACEMENT = 10.0f; 
 const float MAX_THETA = M_PI;
 
+const float unitToCM_left = 30.0 / left_y; 
+const float unitToCM_right = 30.0 / right_y; 
+
 // Pre-Compute semi-synchronous sample rates for navigation sensors and camera
 const int NAVSENSOR_FPS = 1000;
 
@@ -80,7 +83,7 @@ typedef struct {
 const unit_specification_t units = {Unit::Distance::MICROMETER,
                                     Unit::Time::MICROSECOND};  
 constexpr char delimiter = ',';
-constexpr unsigned char decimalPlaces = 4;
+constexpr unsigned char decimalPlaces = 8;
 
 // Sensor and Field Nafes
 const sensor_name_t sensorNames[] = {"center"};

@@ -24,7 +24,8 @@ volatile uint32_t nreps = 0;
 
 
 String count;
-char input2[20];
+// char input2[20]; no longer needed if not using virmen
+
 // =============================================================================
 //   SETUP & LOOP
 // =============================================================================
@@ -70,6 +71,13 @@ inline static bool initialize() {
   // Begin Sensor B
   adnsB.begin();
 
+  // Reset displacement values for both sensors
+  adnsA.triggerSampleCapture();
+  adnsA.readDisplacement(units); // Clear any residual displacement data
+
+  adnsB.triggerSampleCapture();
+  adnsB.readDisplacement(units); // Clear any residual displacement data
+  
   fastPinMode(TRIGGER_PIN, OUTPUT);
   fastDigitalWrite(TRIGGER_PIN, LOW);
   delay(1);
@@ -168,121 +176,54 @@ void captureDisplacement() {
 void sendHeader() {
   const String dunit = getAbbreviation(units.distance);
   const String tunit = getAbbreviation(units.time);
-  // Serial.flush();
-  sensorA_x_pos = 0;
-  sensorA_y_pos = 0;
-  sensorB_x_pos = 0;
-  sensorB_y_pos = 0;
-  x_pos = 0;
-  y_pos = 0;
+  Serial.flush();
   Serial.print(String(
       String("timestamp [ms]") + delimiter + flatFieldNames[0] + " [" + dunit +
       "]" + delimiter + flatFieldNames[1] + " [" + dunit + "]" + delimiter +
       flatFieldNames[2] + " [" + tunit + "]" +delimiter + " waterPin " "\n"));
+  left_sensor_sum = 0;
+  right_sensor_sum = 0; 
 }
 
  
 void sendData(sensor_sample_t sampleA, String sensorNameA, sensor_sample_t sampleB, String sensorNameB) {
   // Convert to String class
   const String timestamp = String(sampleB.timestamp);
-  sampleA.center.p.dx = abs(sampleA.center.p.dx) < 1000 ? 0 : sampleA.center.p.dx;
-  sampleA.center.p.dy = abs(sampleA.center.p.dy) < 1000 ? 0 : sampleA.center.p.dy;
-  sampleB.center.p.dx = abs(sampleB.center.p.dx) < 1000 ? 0 : sampleB.center.p.dx;
-  sampleB.center.p.dy = abs(sampleB.center.p.dy) < 1000 ? 0 : sampleB.center.p.dy;
-  const String dxL = String(sampleA.center.p.dx, decimalPlaces);
-  const String dyL = String(sampleA.center.p.dy, decimalPlaces);
+  // left_sensor_sum += sampleA.center.p.dx;
+  // right_sensor_sum += sampleB.center.p.dx;
+  float left_x_calibrated = sampleA.center.p.dx * unitToCM_left;
+  float left_y_calibrated = sampleA.center.p.dy * unitToCM_left;
+  float right_x_calibrated = sampleB.center.p.dx * unitToCM_right;
+  float right_y_calibrated = sampleB.center.p.dy * unitToCM_right;
+  left_x_calibrated = abs(left_x_calibrated) < 0.0001 ? 0 : left_x_calibrated;
+  left_y_calibrated = abs(left_y_calibrated) < 0.0001 ? 0 : left_y_calibrated;
+  right_x_calibrated = abs(right_x_calibrated) < 0.0001 ? 0 : right_x_calibrated;
+  right_y_calibrated = abs(right_y_calibrated) < 0.0001 ? 0 : right_y_calibrated;
+  const String dxL = String(left_x_calibrated, decimalPlaces);
+  const String dyL = String(left_y_calibrated, decimalPlaces);
   const String dtL = String(sampleA.center.p.dt, decimalPlaces);
-  const String dxR = String(sampleB.center.p.dx, decimalPlaces);
-  const String dyR = String(sampleB.center.p.dy, decimalPlaces);
+  const String dxR = String(right_x_calibrated, decimalPlaces);
+  const String dyR = String(right_y_calibrated, decimalPlaces);
   const String dtR = String(sampleB.center.p.dt, decimalPlaces);
   const String waterPinVal = 0;
   const String endline = String("\n");
-  // Serial.availableForWrite
-  //getMovement data
-  // Virmen Scale
-  float scale = 128/23; //virmen distance/experimental distance
-  //scale of maze taken into account, measurement in mm
-  float unitsPerRotationL = 1963651.453/(3*2*2.54);  //average of three complete rotations
-  float unitsPerRotationR =  1963651.233/(3*2*2.54); //average of three complete rotations
-  float ballCircumferenceIn = 25.125; //measured in lab
-  float ballCircumferenceCm = ballCircumferenceIn*2.54; //definition
-  float ballRadiusCm  = ballCircumferenceCm/(2*M_PI); //definition
 
+  float movement_X =  (left_x_calibrated + right_x_calibrated * cos(37/360 * 2 * pi) -  left_y_calibrated * sin(37/360 * 2 * pi))/2 * magic_number;
+  float movement_Y =  (left_y_calibrated + right_x_calibrated * cos(37/360 * 2 * pi) +  left_y_calibrated * sin(37/360 * 2 * pi))/2 * magic_number;
+  float rel_direction = atan2(movement_Y, movement_X) * 180 / PI;
+  float theta = atan2(movement_Y, movement_X);
 
-  float sensorAngleDegrees = 78; //measured in lab
-  float sensorAngleRadians = sensorAngleDegrees*2*M_PI/360; //definition
-
-  float cmPerUnitL = ballCircumferenceCm/unitsPerRotationL;
-  float cmPerUnitR = ballCircumferenceCm/unitsPerRotationR;
-
-  float dlx = sampleA.center.p.dx*cmPerUnitL; //convert measurements to units of cm
-  float drx = sampleB.center.p.dx*cmPerUnitR; //convert measurements to units of cm
-  float dry = sampleA.center.p.dy*cmPerUnitR; //convert measurements to units of cm
-  float dly = sampleA.center.p.dy*cmPerUnitR;
-
-  float dThetaL = (sampleA.center.p.dx)*2*M_PI/unitsPer2PiRotationL;
-  float dThetaR = (sampleB.center.p.dx)*2*M_PI/unitsPer2PiRotationR;
-
-  float dTheta = (dThetaL + dThetaR)/2 ;
-  float sgn = (dTheta > 0) - (dTheta < 0);
-  const float pi = 3.14159;  // Use a constant for pi
-
-
-  float dyT = dry;
-
-  float dxT = (dly-dry*cos(sensorAngleRadians))/cos(M_PI/2-sensorAngleRadians);
-  float sgn2 = (dyT > 0) - (dyT < 0);
-  float distance = sqrt(dxT*dxT + dyT*dyT);
-
-  // Validate displacement values
-  if (distance > MAX_SINGLE_DISPLACEMENT) {
-      // Scale down the values proportionally if they exceed threshold
-      float scale = MAX_SINGLE_DISPLACEMENT / distance;
-      dxT *= scale;
-      dyT *= scale;
-      distance = MAX_SINGLE_DISPLACEMENT;
-  }
-
-  float theta = atan2((dxT), dyT);
-  theta = sgn * std::min(static_cast<float>(std::exp(1.4 * std::pow(std::fabs(theta), 1.2))) - 1, pi);
-
-  // Clamp theta to reasonable range
-  theta = std::max(std::min(theta, MAX_THETA), -MAX_THETA);
-
-  // compute the angle relative to the dx axis
-  float rel_direction = atan2(dyT,dxT);
-  rel_direction = rel_direction+(-152*2*M_PI/360/4);
-
-  // Validate final displacement calculations
-  dyT = 4.60975609756/4*sin(rel_direction)*distance*6.0;
-  dxT = 4.04115037444/4*cos(rel_direction)*distance*6.0;
-
-  const String dxTriangle = String(dxT, decimalPlaces);
-  const String dyTriangle = String(dyT, decimalPlaces);
-
-  const String dThetaTest = String(theta,decimalPlaces);
-  int varile=0;
-  for(int i=0;i<10;i++){
-    varile+=fastDigitalRead(WATER_PIN);
-    delay(2);
-  }
-  String variable = String(varile);
-
-  // x_pos += sampleB.center.p.dx;
-  // y_pos += sampleB.center.p.dy;
-  x_pos += sampleB.center.p.dx;
-  y_pos += sampleB.center.p.dy;
-  
-
-  // Print ASCII Strings
+  // // Print ASCII Strings
+  // Serial.print(timestamp + delimiter + dxL + delimiter + dyL + delimiter + dtL + delimiter + 
+  //   dxR + delimiter + dyR + delimiter + dtR  + delimiter + 
+  //   movement_X + delimiter + movement_Y + delimiter + rel_direction + delimiter + 
+  //   rel_direction + delimiter + String(rel_direction) + delimiter + 
+  //   String(currentFrameCount) + endline);
   Serial.print(timestamp + delimiter + dxL + delimiter + dyL + delimiter + dtL + delimiter + 
-                                       dxR + delimiter + dyR + delimiter + dtR  + delimiter + 
-                                       dxTriangle + delimiter + dyTriangle + delimiter + dTheta + delimiter + 
-                                       variable + delimiter + String(rel_direction) + delimiter + 
-                                       String(currentFrameCount) + endline);
-  // Serial.print(String(x_pos) + delimiter + String(y_pos) + endline);
-  // Serial.print((dxL) + delimiter + (dyL) + endline);
-
+    dxR + delimiter + dyR + delimiter + dtR  + delimiter + 
+    String(movement_X,7) + delimiter + String(movement_Y,7) + delimiter + String(theta, 7) + delimiter + 
+    0 + delimiter + String(rel_direction, 7) + delimiter + 
+    String(currentFrameCount) + endline);
 
 }
 
